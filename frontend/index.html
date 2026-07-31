@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KRTI Ground Control</title>
+  <link rel="stylesheet" href="vendor/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">KRTI<span> Ground Control</span></div>
+    <div class="pills">
+      <div id="pill-link" class="pill pill-danger">NO LINK</div>
+      <div id="pill-mode" class="pill">---</div>
+      <div id="pill-arm" class="pill">DISARMED</div>
+      <div id="pill-gps" class="pill">GPS --</div>
+      <div id="pill-batt" class="pill">--.- V</div>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- ======================= left: map + cameras ======================= -->
+    <section class="map-col">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-toolbar">
+          <button id="btn-addmode" class="tb-btn tb-active" title="Click on the map to add waypoints">ADD WP: ON</button>
+          <button id="btn-add-current" class="tb-btn" title="Add the drone's current position as a waypoint">+ CURRENT POS</button>
+          <label class="tb-field">ALT <input id="inp-alt" type="number" value="10" min="1" max="200" step="1" /> m</label>
+          <button id="btn-clear-mission" class="tb-btn tb-warn">CLEAR</button>
+        </div>
+      </div>
+
+      <div class="cameras">
+        <figure class="cam">
+          <img id="cam-down" alt="down camera offline" />
+          <figcaption>DOWN &middot; LOGITECH</figcaption>
+        </figure>
+        <figure class="cam">
+          <img id="cam-front" alt="front camera offline" />
+          <figcaption>FRONT &middot; REALSENSE RGB</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ======================= right: sidebar ======================= -->
+    <aside class="sidebar">
+
+      <section class="card">
+        <h2>Telemetry</h2>
+        <div class="telem-grid">
+          <div class="telem"><label>ALT REL</label><span id="t-alt">--</span><em>m</em></div>
+          <div class="telem"><label>GSPD</label><span id="t-gs">--</span><em>m/s</em></div>
+          <div class="telem"><label>HDG</label><span id="t-hdg">--</span><em>&deg;</em></div>
+          <div class="telem"><label>CLIMB</label><span id="t-vs">--</span><em>m/s</em></div>
+          <div class="telem"><label>SATS</label><span id="t-sats">--</span><em></em></div>
+          <div class="telem"><label>THR</label><span id="t-thr">--</span><em>%</em></div>
+          <div class="telem"><label>ROLL</label><span id="t-roll">--</span><em>&deg;</em></div>
+          <div class="telem"><label>PITCH</label><span id="t-pitch">--</span><em>&deg;</em></div>
+        </div>
+        <div class="telem-pos mono" id="t-pos">no position</div>
+      </section>
+
+      <section class="card">
+        <h2>Mission <span id="mission-count" class="h2-note">0 items</span></h2>
+        <ol id="mission-list" class="mission-list"></ol>
+        <div class="add-servo">
+          <select id="sel-servo"></select>
+          <select id="sel-servo-action"></select>
+          <input id="inp-servo-pwm" type="number" min="500" max="2500" step="10" value="1500" title="Custom PWM (&micro;s)" hidden />
+          <button id="btn-add-servo" class="btn btn-ghost">+ SERVO CMD</button>
+        </div>
+        <div class="btn-row">
+          <button id="btn-upload" class="btn btn-primary">UPLOAD MISSION</button>
+          <button id="btn-start" class="btn btn-go">START MISSION</button>
+          <button id="btn-pause" class="btn btn-ghost" title="Loiter in place">HOLD</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Flight</h2>
+        <div class="btn-row">
+          <button id="btn-arm" class="btn btn-warn">ARM</button>
+          <button id="btn-disarm" class="btn btn-danger">DISARM</button>
+        </div>
+        <div class="btn-row">
+          <label class="inline-field">ALT <input id="inp-takeoff-alt" type="number" value="5" min="1" max="50" step="1" /> m</label>
+          <button id="btn-takeoff" class="btn btn-go">TAKEOFF</button>
+        </div>
+        <div class="btn-row">
+          <button id="btn-land" class="btn btn-danger">LAND</button>
+          <button id="btn-rtl" class="btn btn-warn">RTL</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Servos <span class="h2-note">PCA9685</span></h2>
+        <div id="servo-controls" class="servo-controls"></div>
+      </section>
+
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

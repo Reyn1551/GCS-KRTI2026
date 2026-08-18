@@ -65,8 +65,15 @@ class MAVLinkManager:
         # Mission upload state machine
         self._mission_lock = threading.Lock()
         self._mission_items = None      # list of dicts while an upload is active
+        self._active_mission_items = [] # last successfully uploaded mission items
+        self._auto_closed_seqs = set()   # tracking seq numbers already auto-closed
         self._mission_error = None
         self._mission_done = threading.Event()
+
+        # Parameter read/write
+        self._param_lock = threading.Lock()
+        self._params = {}               # name -> last known value
+        self._param_waiters = {}        # name -> {"event": Event, "value": float|None}
 
     # ------------------------------------------------------------------ #
     # lifecycle
@@ -81,6 +88,8 @@ class MAVLinkManager:
             "armed": False,
             "lat": None,
             "lon": None,
+            "home_lat": None,
+            "home_lon": None,
             "alt_rel": None,
             "alt_msl": None,
             "heading": None,
@@ -95,6 +104,7 @@ class MAVLinkManager:
             "roll": None,
             "pitch": None,
             "mission_seq": None,
+            "last_status": None,
         }
 
     def start(self):
@@ -212,6 +222,12 @@ class MAVLinkManager:
                 gps_fix=msg.fix_type, satellites=msg.satellites_visible
             )
 
+        elif mtype == "HOME_POSITION":
+            self._set_telemetry(
+                home_lat=msg.latitude / 1e7,
+                home_lon=msg.longitude / 1e7,
+            )
+
         elif mtype == "SYS_STATUS":
             self._set_telemetry(
                 battery_voltage=msg.voltage_battery / 1000.0
@@ -227,8 +243,9 @@ class MAVLinkManager:
                 roll=math.degrees(msg.roll), pitch=math.degrees(msg.pitch)
             )
 
-        elif mtype == "MISSION_CURRENT":
+        elif mtype in ("MISSION_CURRENT", "MISSION_ITEM_REACHED"):
             self._set_telemetry(mission_seq=msg.seq)
+            self._check_auto_close_servo(msg.seq)
 
         elif mtype == "COMMAND_ACK":
             with self._cmd_lock:
@@ -239,11 +256,19 @@ class MAVLinkManager:
                     self._cmd_ack_result = msg.result
                     self._cmd_ack_event.set()
 
+        elif mtype == "STATUSTEXT":
+            text = msg.text.rstrip("\x00 ")
+            log.info("Vehicle status (sev %s): %s", msg.severity, text)
+            self._set_telemetry(last_status=text)
+
         elif mtype in ("MISSION_REQUEST", "MISSION_REQUEST_INT"):
             self._serve_mission_request(msg.seq)
 
         elif mtype == "MISSION_ACK":
             self._handle_mission_ack(msg.type)
+
+        elif mtype == "PARAM_VALUE":
+            self._handle_param_value(msg)
 
     # ------------------------------------------------------------------ #
     # commands
@@ -279,7 +304,10 @@ class MAVLinkManager:
             return {"ack": None, "result": None, "result_text": "NO_ACK"}
         text = MAV_RESULT_TEXT.get(result, str(result))
         if result != mavutil.mavlink.MAV_RESULT_ACCEPTED:
-            raise CommandRejectedError(f"Command {command} rejected: {text}")
+            status = self._telemetry.get("last_status") or "no status text"
+            raise CommandRejectedError(
+                f"Command {command} rejected ({text}); vehicle: {status}"
+            )
         return {"ack": True, "result": result, "result_text": text}
 
     def arm(self, do_arm: bool = True):
@@ -321,7 +349,128 @@ class MAVLinkManager:
             if self.get_telemetry()["mode"] == mode:
                 return {"ack": True, "mode": mode}
             time.sleep(0.2)
-        return {"ack": None, "mode": mode, "note": "mode change not confirmed"}
+        raise CommandRejectedError(
+            f"Mode change to {mode} not confirmed by the vehicle (mode stays: "
+            f"{self.get_telemetry()['mode']})"
+        )
+
+    # ------------------------------------------------------------------ #
+    # parameters (read / write / save to EEPROM)
+    # ------------------------------------------------------------------ #
+
+    def _handle_param_value(self, msg):
+        name = msg.param_id.rstrip("\x00 ").upper()
+        value = msg.param_value
+        waiter = None
+        with self._param_lock:
+            self._params[name] = value
+            waiter = self._param_waiters.get(name)
+        if waiter is not None:
+            waiter["value"] = value
+            waiter["event"].set()
+
+    def read_params(self, names, timeout: float = 4.0):
+        """Read one or more parameters from the vehicle (PARAM_REQUEST_READ).
+
+        All requests are sent in parallel and stragglers are retried once, so
+        reading a full catalog is fast even on a congested link. Values are
+        seeded from the last known cache, meaning known parameters still come
+        back instantly the next refresh. Names the vehicle never answers
+        (parameter missing from firmware, lost link) come back as None.
+        """
+        self._require_vehicle()
+        names = [n for n in (str(raw).upper().strip() for raw in names) if n]
+
+        # Seed from cache: values already seen streamed/stored are instant.
+        out = {}
+        with self._param_lock:
+            for name in names:
+                if name in self._params:
+                    out[name] = self._params[name]
+
+        unresolved = [n for n in names if n not in out]
+        if not unresolved:
+            return out
+
+        def send_request(want):
+            with self._param_lock:
+                for name in want:
+                    if name not in self._param_waiters:
+                        self._param_waiters[name] = {
+                            "event": threading.Event(), "value": None,
+                        }
+            for name in want:
+                self.master.mav.param_request_read_send(
+                    self.target_system,
+                    self.target_component,
+                    name.encode("ascii"),
+                    -1,
+                )
+
+        def drain(want, deadline):
+            remaining = list(want)
+            while remaining and time.time() < deadline:
+                time.sleep(0.2)
+                done = []
+                with self._param_lock:
+                    for name in remaining:
+                        waiter = self._param_waiters.get(name)
+                        if waiter and waiter["event"].is_set():
+                            out[name] = waiter["value"]
+                            done.append(name)
+                remaining = [n for n in remaining if n not in done]
+            return remaining
+
+        send_request(unresolved)
+        missing = drain(unresolved, time.time() + timeout)
+        if missing:
+            # One retry for anything ArduPilot did not answer yet.
+            send_request(missing)
+            drain(missing, time.time() + timeout)
+
+        with self._param_lock:
+            for name in names:
+                self._param_waiters.pop(name, None)
+        return out
+
+    def set_param(self, name, value, timeout: float = 3.0):
+        """Set a parameter on the vehicle (PARAM_SET) and confirm the echo.
+
+        ArduPilot replies with the stored value; a mismatch (or no reply)
+        means the parameter was rejected.
+        """
+        self._require_vehicle()
+        name = str(name).upper().strip()
+        target = float(value)
+        with self._param_lock:
+            event = threading.Event()
+            self._param_waiters[name] = {"event": event, "value": None}
+        try:
+            self.master.mav.param_set_send(
+                self.target_system,
+                self.target_component,
+                name.encode("ascii"),
+                target,
+                mavutil.mavlink.MAV_PARAM_TYPE_REAL32,
+            )
+            if not event.wait(timeout):
+                raise CommandRejectedError(f"No PARAM_VALUE reply for {name}")
+            with self._param_lock:
+                received = self._param_waiters[name]["value"]
+            if received is None or abs(received - target) > 0.5:
+                raise CommandRejectedError(
+                    f"{name} rejected (autopilot kept {received})"
+                )
+            return {"name": name, "value": received}
+        finally:
+            with self._param_lock:
+                self._param_waiters.pop(name, None)
+
+    def save_params(self):
+        """MAV_CMD_PREFLIGHT_STORAGE p1=2 -> write all params to EEPROM."""
+        return self._command_long(
+            mavutil.mavlink.MAV_CMD_PREFLIGHT_STORAGE, p1=2
+        )
 
     # ------------------------------------------------------------------ #
     # mission upload
@@ -353,7 +502,49 @@ class MAVLinkManager:
         if error:
             raise MissionUploadError(error)
         log.info("Mission upload complete")
+        with self._mission_lock:
+            self._active_mission_items = list(items)
+            self._auto_closed_seqs.clear()
         return {"uploaded": len(items)}
+
+    def _check_auto_close_servo(self, seq: int):
+        with self._mission_lock:
+            if not self._active_mission_items:
+                return
+            for idx in range(min(seq + 1, len(self._active_mission_items))):
+                if idx in self._auto_closed_seqs:
+                    continue
+                it = self._active_mission_items[idx]
+                if (
+                    it.get("command") == mavutil.mavlink.MAV_CMD_DO_SET_SERVO
+                    and it.get("auto_close")
+                ):
+                    self._auto_closed_seqs.add(idx)
+                    servo = int(it.get("param1", 10))
+                    close_pwm = int(it.get("close_pwm", 1100))
+                    delay_sec = float(it.get("close_delay", 2.0))
+
+                    def _do_auto_close(s=servo, cp=close_pwm, d=delay_sec, item_seq=idx):
+                        log.info(
+                            "Auto-close trigger (seq #%d): waiting %.1fs before closing servo %d (PWM %d) while continuing mission...",
+                            item_seq, d, s, cp,
+                        )
+                        time.sleep(d)
+                        try:
+                            self.set_servo(s, cp)
+                            log.info(
+                                "Servo %d auto-closed to PWM %d successfully after %.1fs delay while in flight!",
+                                s, cp, d,
+                            )
+                        except Exception as err:
+                            log.error("Failed auto-closing servo %d: %s", s, err)
+
+                    import threading
+                    threading.Thread(
+                        target=_do_auto_close,
+                        name=f"servo-autoclose-{idx}",
+                        daemon=True,
+                    ).start()
 
     def _serve_mission_request(self, seq):
         with self._mission_lock:

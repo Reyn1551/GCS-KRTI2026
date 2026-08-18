@@ -1,112 +1,466 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>KRTI Ground Control</title>
+  <title>KRTI 2026 Ground Control Station</title>
   <link rel="stylesheet" href="vendor/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <!-- Top Bar / Cockpit Header -->
   <header class="topbar">
-    <div class="brand">KRTI<span> Ground Control</span></div>
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">KRTI 2026</span>
+        <span class="brand-sub">GROUND CONTROL STATION</span>
+      </div>
+    </div>
+
+    <!-- Status Pills Header -->
     <div class="pills">
-      <div id="pill-link" class="pill pill-danger">NO LINK</div>
-      <div id="pill-mode" class="pill">---</div>
-      <div id="pill-arm" class="pill">DISARMED</div>
-      <div id="pill-gps" class="pill">GPS --</div>
-      <div id="pill-batt" class="pill">--.- V</div>
+      <div id="pill-link" class="pill pill-danger" title="Status koneksi telemetry MAVLink ke drone">
+        <span class="pill-dot"></span> NO LINK
+      </div>
+      <div id="pill-mode" class="pill" title="Mode penerbangan ArduPilot saat ini">
+        MODE: ---
+      </div>
+      <div id="pill-arm" class="pill" title="Status penguncian motor drone">
+        DISARMED
+      </div>
+      <div id="pill-gps" class="pill" title="Status fix lokasi GPS dan jumlah satelit">
+        GPS: NO FIX
+      </div>
+      <div id="pill-batt" class="pill" title="Tegangan dan sisa daya baterai drone">
+        BATTERY: --.- V
+      </div>
+      <div id="pill-status" class="pill" title="Pesan status terakhir dari autopilot (STATUSTEXT)">
+        STATUS: ---
+      </div>
     </div>
   </header>
 
-  <main class="layout">
+  <main class="layout" id="main-layout">
 
-    <!-- ======================= left: map + cameras ======================= -->
-    <section class="map-col">
-      <div class="map-wrap">
-        <div id="map"></div>
-        <div class="map-toolbar">
-          <button id="btn-addmode" class="tb-btn tb-active" title="Click on the map to add waypoints">ADD WP: ON</button>
-          <button id="btn-add-current" class="tb-btn" title="Add the drone's current position as a waypoint">+ CURRENT POS</button>
-          <label class="tb-field">ALT <input id="inp-alt" type="number" value="10" min="1" max="200" step="1" /> m</label>
-          <button id="btn-clear-mission" class="tb-btn tb-warn">CLEAR</button>
+    <!-- Left Column: Map Toolbar + Map Canvas + Camera Feeds -->
+    <section class="map-col" id="map-col">
+
+      <!-- Dedicated Map Control Toolbar (Does NOT obstruct map tiles) -->
+      <div class="map-toolbar">
+        <div class="tb-group">
+          <button id="btn-center-drone" class="tb-btn tb-highlight" title="Center map on current drone GPS position">
+            CENTER DRONE
+          </button>
+          <button id="btn-toggle-follow" class="tb-btn" title="Toggle map auto-follow mode to track vehicle in real-time">
+            FOLLOW: OFF
+          </button>
         </div>
+
+        <div class="tb-divider"></div>
+
+        <div class="tb-group">
+          <button id="btn-addmode" class="tb-btn tb-active" title="Map click mode: click anywhere on the map to add a new waypoint">
+            MAP CLICK: ON
+          </button>
+          <button id="btn-add-current" class="tb-btn" title="Use current drone GPS coordinates as a new waypoint">
+            CURRENT DRONE POS
+          </button>
+        </div>
+
+        <div class="tb-divider"></div>
+
+        <div class="tb-field-wrap">
+          <label class="tb-field" title="Target relative altitude (meters) for new waypoints added via map clicks">
+            <span class="tb-label">New WP Alt:</span>
+            <input id="inp-alt" type="number" value="1" min="1" max="200" step="1" />
+            <span class="tb-unit">meters</span>
+          </label>
+        </div>
+
+        <div class="tb-divider"></div>
+
+        <button id="btn-clear-mission" class="tb-btn tb-warn" title="Clear all waypoints in the current mission list">
+          CLEAR MISSION
+        </button>
       </div>
 
-      <div class="cameras">
+      <div class="map-wrap" id="map-wrap">
+        <div id="map"></div>
+      </div>
+
+      <!-- Horizontal Resizer between Map and Camera Feeds -->
+      <div class="resizer-h" id="resizer-h" title="Drag vertically to adjust camera panel height">
+        <div class="resizer-h-handle"></div>
+      </div>
+
+      <!-- Camera Streams Panel -->
+      <div class="cameras" id="cameras-panel">
         <figure class="cam">
-          <img id="cam-down" alt="down camera offline" />
-          <figcaption>DOWN &middot; LOGITECH</figcaption>
-        </figure>
-        <figure class="cam">
-          <img id="cam-front" alt="front camera offline" />
-          <figcaption>FRONT &middot; REALSENSE RGB</figcaption>
+          <img id="cam-down" alt="Down Camera Offline" />
+          <figcaption>
+            <span class="cam-dot"></span>
+            <span class="cam-name">DOWN CAMERA</span>
+            <span class="cam-device">LOGITECH USB (PORT 8080)</span>
+          </figcaption>
+          <div class="cam-ctl" id="exposure-ctl" title="Down camera exposure control (µs)">
+            <label for="exposure-slider">EXPOSURE</label>
+            <input type="range" id="exposure-slider" min="0" max="10000"
+                   step="1" value="0" disabled />
+            <span id="exposure-val">--</span>
+          </div>
         </figure>
       </div>
     </section>
 
-    <!-- ======================= right: sidebar ======================= -->
-    <aside class="sidebar">
+    <!-- Vertical Resizer between Map Column and Sidebar -->
+    <div class="resizer-v" id="resizer-v" title="Drag horizontally to adjust sidebar width">
+      <div class="resizer-v-handle"></div>
+    </div>
 
-      <section class="card">
-        <h2>Telemetry</h2>
-        <div class="telem-grid">
-          <div class="telem"><label>ALT REL</label><span id="t-alt">--</span><em>m</em></div>
-          <div class="telem"><label>GSPD</label><span id="t-gs">--</span><em>m/s</em></div>
-          <div class="telem"><label>HDG</label><span id="t-hdg">--</span><em>&deg;</em></div>
-          <div class="telem"><label>CLIMB</label><span id="t-vs">--</span><em>m/s</em></div>
-          <div class="telem"><label>SATS</label><span id="t-sats">--</span><em></em></div>
-          <div class="telem"><label>THR</label><span id="t-thr">--</span><em>%</em></div>
-          <div class="telem"><label>ROLL</label><span id="t-roll">--</span><em>&deg;</em></div>
-          <div class="telem"><label>PITCH</label><span id="t-pitch">--</span><em>&deg;</em></div>
-        </div>
-        <div class="telem-pos mono" id="t-pos">no position</div>
-      </section>
+    <!-- Right Column: Control & Configuration Sidebar -->
+    <aside class="sidebar" id="sidebar">
 
-      <section class="card">
-        <h2>Mission <span id="mission-count" class="h2-note">0 items</span></h2>
-        <ol id="mission-list" class="mission-list"></ol>
-        <div class="add-servo">
-          <select id="sel-servo"></select>
-          <select id="sel-servo-action"></select>
-          <input id="inp-servo-pwm" type="number" min="500" max="2500" step="10" value="1500" title="Custom PWM (&micro;s)" hidden />
-          <button id="btn-add-servo" class="btn btn-ghost">+ SERVO CMD</button>
-        </div>
-        <div class="btn-row">
-          <button id="btn-upload" class="btn btn-primary">UPLOAD MISSION</button>
-          <button id="btn-start" class="btn btn-go">START MISSION</button>
-          <button id="btn-pause" class="btn btn-ghost" title="Loiter in place">HOLD</button>
-        </div>
-      </section>
+      <!-- Navigation Tabs -->
+      <nav class="tabs">
+        <button id="tab-mission" class="tab-btn tab-active">
+          MISSION & CONTROL
+        </button>
+        <button id="tab-config" class="tab-btn">
+          PARAMETER CONFIG
+        </button>
+      </nav>
 
-      <section class="card">
-        <h2>Flight</h2>
-        <div class="btn-row">
-          <button id="btn-arm" class="btn btn-warn">ARM</button>
-          <button id="btn-disarm" class="btn btn-danger">DISARM</button>
-        </div>
-        <div class="btn-row">
-          <label class="inline-field">ALT <input id="inp-takeoff-alt" type="number" value="5" min="1" max="50" step="1" /> m</label>
-          <button id="btn-takeoff" class="btn btn-go">TAKEOFF</button>
-        </div>
-        <div class="btn-row">
-          <button id="btn-land" class="btn btn-danger">LAND</button>
-          <button id="btn-rtl" class="btn btn-warn">RTL</button>
-        </div>
-      </section>
+      <!-- Panel 1: Flight Control & Mission Planning -->
+      <div class="tab-panel" id="panel-mission">
 
-      <section class="card">
-        <h2>Servos <span class="h2-note">PCA9685</span></h2>
-        <div id="servo-controls" class="servo-controls"></div>
-      </section>
+        <!-- Competition & Flight Timers Card -->
+        <section class="card timer-card">
+          <div class="card-header">
+            <h2>Competition & Flight Timers</h2>
+            <span class="h2-note">KRTI Timer</span>
+          </div>
+
+          <div class="timer-grid">
+            <!-- 10 Minute Competition Countdown Timer -->
+            <div class="timer-box comp-timer-box" id="comp-timer-box">
+              <div class="timer-title-row">
+                <span class="timer-label">COMPETITION TIMER (10m)</span>
+                <span class="timer-tag tag-ready" id="comp-timer-tag">READY</span>
+              </div>
+              <div class="timer-val mono" id="comp-timer-val">10:00</div>
+              <div class="timer-actions">
+                <button id="btn-comp-timer-toggle" class="btn btn-xs btn-ghost" title="Start / Pause 10m competition timer">START / PAUSE</button>
+                <button id="btn-comp-timer-reset" class="btn btn-xs btn-ghost" title="Reset 10m timer to 10:00 for a new attempt session">RESET (10m)</button>
+              </div>
+            </div>
+
+            <!-- Flight Duration & Best Time -->
+            <div class="timer-box flight-timer-box" id="flight-timer-box">
+              <div class="timer-title-row">
+                <span class="timer-label">FLIGHT DURATION</span>
+                <span class="timer-tag tag-idle" id="flight-timer-tag">STANDBY</span>
+              </div>
+              <div class="timer-val mono" id="flight-timer-val">00:00</div>
+              <div class="timer-best-row">
+                <span>BEST TIME:</span>
+                <span class="mono timer-best-val" id="flight-best-val">--:--</span>
+                <button id="btn-reset-best" class="btn-link-xs" title="Clear saved best flight time">Reset</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Telemetry HUD Card -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Live Flight Telemetry</h2>
+            <span class="h2-note">MAVLink HUD</span>
+          </div>
+
+          <div class="telem-grid">
+            <div class="telem" title="Relative altitude above home/takeoff point (meters)">
+              <label>ALT REL</label>
+              <div class="telem-val-wrap"><span id="t-alt">--</span><em> m</em></div>
+            </div>
+            <div class="telem" title="Mean Sea Level altitude (MSL Altitude)">
+              <label>ALT MSL</label>
+              <div class="telem-val-wrap"><span id="t-alt-msl">--</span><em> m</em></div>
+            </div>
+            <div class="telem" title="Horizontal groundspeed (meters/second)">
+              <label>GROUNDSPEED</label>
+              <div class="telem-val-wrap"><span id="t-gs">--</span><em> m/s</em></div>
+            </div>
+            <div class="telem" title="Vertical climb or descent rate (meters/second)">
+              <label>CLIMB RATE</label>
+              <div class="telem-val-wrap"><span id="t-vs">--</span><em> m/s</em></div>
+            </div>
+            <div class="telem" title="Compass heading direction (0 - 360 degrees)">
+              <label>HEADING</label>
+              <div class="telem-val-wrap"><span id="t-hdg">--</span><em>&deg;</em></div>
+            </div>
+            <div class="telem" title="Current motor throttle percentage">
+              <label>THROTTLE</label>
+              <div class="telem-val-wrap"><span id="t-thr">--</span><em>%</em></div>
+            </div>
+            <div class="telem" title="Number of locked GPS satellites">
+              <label>GPS SATS</label>
+              <div class="telem-val-wrap"><span id="t-sats">--</span><em> sats</em></div>
+            </div>
+            <div class="telem" title="Roll and pitch tilt angles (degrees)">
+              <label>ROLL / PITCH</label>
+              <div class="telem-val-wrap"><span id="t-roll">--</span><em>&deg;</em> / <span id="t-pitch">--</span><em>&deg;</em></div>
+            </div>
+          </div>
+
+          <div class="telem-pos mono" id="t-pos" title="Current GPS latitude and longitude coordinates">
+            GPS Location: No Signal Fix
+          </div>
+        </section>
+
+        <!-- Mission Planner Card -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Mission Commands List</h2>
+            <span id="mission-count" class="h2-note">0 items registered</span>
+          </div>
+
+          <!-- Mission Items List -->
+          <ol id="mission-list" class="mission-list"></ol>
+
+          <!-- Add Mission Command Form -->
+          <div class="form-section">
+            <label class="section-label" title="Add a new flight command to the mission list">
+              Add Mission Command
+            </label>
+
+            <div class="field-box">
+              <span class="field-title">Select Command:</span>
+              <select id="sel-item-type" onchange="onMissionItemTypeChange()">
+                <option value="waypoint">Waypoint Navigation</option>
+                <option value="takeoff">Auto Takeoff</option>
+                <option value="land">Auto Landing</option>
+                <option value="servo">Payload Servo (Open / Close)</option>
+                <option value="delay">Hover Delay</option>
+                <option value="arm">Arm Motors</option>
+                <option value="disarm">Disarm Motors</option>
+              </select>
+            </div>
+
+            <!-- Subfields for Waypoint -->
+            <div id="box-item-waypoint" class="add-servo margin-top-sm">
+              <div class="field-box">
+                <span class="field-title">Altitude (m):</span>
+                <input id="inp-item-alt" type="number" value="1" min="1" max="200" step="1" />
+              </div>
+              <div class="field-box">
+                <span class="field-title">Acceptance Radius (m):</span>
+                <input id="inp-item-wp-radius" type="number" value="2.0" min="0.1" max="50" step="0.1" title="Waypoint hit radius tolerance (meters). Set smaller e.g. 0.3m for precision dropping." />
+              </div>
+              <div class="field-box span-2 margin-top-xs">
+                <span class="field-title">Hold Delay (s):</span>
+                <input id="inp-item-wp-delay" type="number" value="0" min="0" max="3600" step="1" />
+              </div>
+            </div>
+
+            <!-- Subfields for Takeoff -->
+            <div id="box-item-takeoff" class="field-box margin-top-sm" hidden style="display: none;">
+              <span class="field-title">Takeoff Altitude (m):</span>
+              <input id="inp-item-takeoff-alt" type="number" value="1" min="1" max="200" step="1" />
+            </div>
+
+            <!-- Subfields for Servo -->
+            <div id="box-item-servo" class="add-servo margin-top-sm" hidden style="display: none;">
+              <div class="field-box">
+                <span class="field-title">Servo Channel:</span>
+                <select id="sel-item-servo-ch"></select>
+              </div>
+              <div class="field-box">
+                <span class="field-title">Servo Action:</span>
+                <select id="sel-item-servo-state" onchange="onServoStateChange()">
+                  <option value="open">Open Servo</option>
+                  <option value="close">Close Servo</option>
+                </select>
+              </div>
+              <div class="field-box span-2 margin-top-xs" id="box-servo-autoclose">
+                <label class="toggle-label" title="Automatically close servo after delay without stopping the drone in flight">
+                  <input type="checkbox" id="chk-item-servo-autoclose" checked onchange="onServoAutoCloseToggle()" />
+                  <span class="toggle-text"><b>Auto-Close In-Flight</b></span>
+                </label>
+              </div>
+              <div class="field-box span-2" id="box-servo-closedelay">
+                <span class="field-title">Auto-Close Delay (Seconds):</span>
+                <input id="inp-item-servo-closedelay" type="number" value="2" min="0.5" max="60" step="0.5" title="Wait time (seconds) before closing servo automatically while continuing flight" />
+              </div>
+            </div>
+
+            <!-- Subfields for Delay -->
+            <div id="box-item-delay" class="field-box margin-top-sm" hidden style="display: none;">
+              <span class="field-title">Hover Delay Duration (Seconds):</span>
+              <input id="inp-item-delay-sec" type="number" value="5" min="1" max="3600" step="1" />
+            </div>
+
+            <button id="btn-add-mission-item" class="btn btn-ghost btn-block margin-top-sm" onclick="addSelectedMissionItem()">
+              + ADD COMMAND TO MISSION
+            </button>
+          </div>
+
+          <!-- Mission Upload, Save & Load Action Buttons -->
+          <div class="action-box">
+            <div class="file-action-row">
+              <button id="btn-save-mission" class="btn btn-ghost" onclick="saveMissionFile()" title="Save/export mission waypoints to file (.waypoints / .json)">
+                SAVE MISSION
+              </button>
+              <button id="btn-load-mission" class="btn btn-ghost" onclick="document.getElementById('inp-mission-file').click()" title="Load/import ArduPilot mission file (.waypoints / .json)">
+                LOAD MISSION
+              </button>
+              <input type="file" id="inp-mission-file" accept=".waypoints,.txt,.json" onchange="if(this.files && this.files[0]) loadMissionFile(this.files[0])" hidden />
+            </div>
+
+            <div class="btn-row">
+              <button id="btn-upload" class="btn btn-primary" title="Upload mission waypoints list to ArduPilot flight controller RAM">
+                UPLOAD MISSION
+              </button>
+              <button id="btn-start" class="btn btn-go" title="Switch flight mode to AUTO to start automated mission flight">
+                START MISSION (AUTO)
+              </button>
+            </div>
+            <div class="btn-row">
+              <button id="btn-pause" class="btn btn-ghost btn-block" title="Hold vehicle position and loiter at current location without clearing mission">
+                HOLD POSITION (LOITER)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Direct Flight Control Card -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Direct Flight Controls</h2>
+          </div>
+          <p class="card-desc"></p>
+
+          <div class="control-group">
+            <span class="control-label">Motor Arming Safety:</span>
+            <div class="btn-row">
+              <button id="btn-arm" class="btn btn-warn" title="Arm motors to unlock safety lock">
+                ARM MOTORS
+              </button>
+              <button id="btn-disarm" class="btn btn-danger" title="Disarm motor power directly (Use with caution)">
+                DISARM MOTORS
+              </button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <span class="control-label">Auto Takeoff (GUIDED):</span>
+            <div class="btn-row align-center">
+              <label class="inline-field">
+                <span>Target Altitude:</span>
+                <input id="inp-takeoff-alt" type="number" value="1" min="1" max="100" step="1" />
+                <span>m</span>
+              </label>
+              <button id="btn-takeoff" class="btn btn-go" title="Arm motors and execute auto takeoff climb to target altitude">
+                AUTO TAKEOFF
+              </button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <span class="control-label">Landing & Return:</span>
+            <div class="btn-row">
+              <button id="btn-land" class="btn btn-danger" title="Command drone to land automatically at current position (LAND)">
+                AUTO LAND
+              </button>
+              <button id="btn-rtl" class="btn btn-warn" title="Command drone to climb to safe altitude and return home to takeoff point (RTL)">
+                RETURN HOME (RTL)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Direct Servo Manual Testing Card -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Manual Servo Testing (PCA9685)</h2>
+            <span class="h2-note">Direct Hardware</span>
+          </div>
+          <p class="card-desc">Direct manual payload dropper testing outside mission workflow.</p>
+          <div id="servo-controls" class="servo-controls"></div>
+        </section>
+
+      </div><!-- /panel-mission -->
+
+
+      <!-- Panel 2: Parameter Configuration Explorer -->
+      <div class="tab-panel" id="panel-config" hidden>
+
+        <!-- Header Controls & Explanation Card -->
+        <section class="card">
+          <div class="card-header">
+            <h2>ArduPilot Parameter Tuning</h2>
+            <span id="param-status" class="h2-note">not loaded</span>
+          </div>
+          
+          <div class="param-explanation">
+            <span class="info-tag">INFO</span>
+            <div class="info-text">
+              These parameters configure drone flight dynamics (waypoint speed, acceleration, RTL altitude, landing, and failsafe). 
+              Values are fetched live from ArduPilot via MAVLink. Click <b>SEND DRAFT</b> to test in RAM, 
+              then click <b>SAVE EEPROM</b> to persist permanently in drone memory.
+            </div>
+          </div>
+
+          <div class="param-toolbar">
+            <div class="param-search-box">
+              <input id="inp-param-search" type="text" placeholder="Search parameter name or description..." title="Type to filter parameters in real-time" />
+              <button id="btn-param-clear-search" class="btn-clear-search" hidden title="Clear search">&times;</button>
+            </div>
+
+            <div class="mass-action-row">
+              <button id="btn-param-refresh" class="btn btn-primary" title="Re-read all live parameter values directly from drone">
+                READ ALL
+              </button>
+              <button id="btn-param-send-all" class="btn btn-go" title="Send all modified parameter draft values to RAM">
+                SEND DRAFT
+              </button>
+              <button id="btn-param-reset" class="btn btn-ghost" title="Discard all unsent parameter draft changes">
+                RESET DRAFT
+              </button>
+              <button id="btn-param-save" class="btn btn-warn" title="Save all RAM parameters permanently to non-volatile EEPROM memory">
+                SAVE EEPROM
+              </button>
+            </div>
+
+            <div class="file-action-row">
+              <button id="btn-param-export" class="btn btn-ghost" title="Export all loaded parameters to ArduPilot file (.param)">
+                EXPORT (.PARAM)
+              </button>
+              <button id="btn-param-import" class="btn btn-ghost" title="Import parameter values from ArduPilot file (.param / .txt)">
+                IMPORT (.PARAM)
+              </button>
+              <input type="file" id="inp-param-file" accept=".param,.txt,.parm" hidden />
+            </div>
+          </div>
+        </section>
+
+        <!-- Parameter Table/Groups Container -->
+        <div id="param-groups"></div>
+
+      </div><!-- /panel-config -->
 
     </aside>
   </main>
 
+  <!-- Toast Notification Bar -->
   <div id="toast" class="toast" hidden></div>
 
   <script src="vendor/leaflet.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=1.3"></script>
 </body>
 </html>

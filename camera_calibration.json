@@ -1,0 +1,93 @@
+{
+  "image_width": 640,
+  "image_height": 480,
+  "pattern_cols_inner_corners": 15,
+  "pattern_rows_inner_corners": 10,
+  "square_size": 25.0,
+  "valid_image_count": 27,
+  "rms_reprojection_error": 0.35839068236331295,
+  "mean_reprojection_error_px": 0.35839049894524083,
+  "camera_matrix": [
+    [
+      591.9753209808321,
+      0.0,
+      339.0459911979357
+    ],
+    [
+      0.0,
+      610.2684261348815,
+      242.59295942949674
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "distortion_coefficients": [
+    0.11855394952244548,
+    -0.35694658018943864,
+    0.0022001600079342926,
+    0.0014428467639463942,
+    0.11352146791178096
+  ],
+  "distortion_model": "opencv_plumb_bob_k1_k2_p1_p2_k3",
+  "used_images": [
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125436_286191.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125437_239136.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125438_087884.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125438_539570.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125438_940254.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125530_413844.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125530_846072.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125531_308417.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125532_032956.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125532_467039.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125600_084487.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125600_234034.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125600_500414.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125600_751359.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125601_000098.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125622_134129.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125624_235578.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125624_602092.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125624_835163.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125625_036527.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125644_263212.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125651_753062.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125659_360182.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125700_642559.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125707_298971.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125707_598973.jpg",
+    "workflows\\camera_calibration\\images\\checkerboard_20260627_125735_286068.jpg"
+  ],
+  "per_view_reprojection_error_px": [
+    0.1591790436563947,
+    0.15511297595344314,
+    0.1525223619873558,
+    0.15129862703149832,
+    0.16157245639817816,
+    0.22460018190954203,
+    0.2408728520248695,
+    0.24036694821293547,
+    0.24013666227182512,
+    0.24958494953800697,
+    0.2128771079845186,
+    0.1801200905244163,
+    0.17106230888751606,
+    0.20456423038894997,
+    0.21274091004907392,
+    0.349717535313725,
+    0.3471323785096832,
+    0.3308852873211514,
+    0.3380461143478361,
+    0.330127778267156,
+    0.15285489093173188,
+    0.14949895416826103,
+    0.2516796286725616,
+    1.2902028463057296,
+    0.1724325758252704,
+    0.15887092707680342,
+    0.6795549318923363
+  ]
+}

@@ -9,15 +9,20 @@
 # Install once:
 #   pip3 install MAVProxy adafruit-circuitpython-pca9685 adafruit-circuitpython-motor
 
-FC_SERIAL=/dev/serial0
-FC_BAUD=921600
-GCS_IP=192.168.10.237
-    # <-- CHANGE to the GCS laptop IP
-GCS_PORT=14550
+FC_SERIAL="${FC_SERIAL:-/dev/ttyAMA0}"
+FC_BAUD="${FC_BAUD:-921600}"
+GCS_IP="${GCS_IP:-192.168.10.121}"
+
+echo "Starting MAVProxy on $FC_SERIAL at $FC_BAUD baud..."
+echo "  UDP Local Backend: 127.0.0.1:14550"
+echo "  UDP Local Servo:   127.0.0.1:14551"
+echo "  UDP GCS Laptop:    $GCS_IP:14553"
 
 mavproxy.py \
-  --master="$FC_SERIAL" \
-  --baudrate="$FC_BAUD" \
-  --out=udp:"$GCS_IP":"$GCS_PORT" \
+  --master="$FC_SERIAL,$FC_BAUD" \
+  --out=udp:127.0.0.1:14550 \
+  --out=udp:127.0.0.1:14551 \
+  --out=udp:"$GCS_IP":14553 \
   --load-module=pca_servo \
   --aircraft=drone
+

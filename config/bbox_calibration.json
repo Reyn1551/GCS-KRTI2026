@@ -1,0 +1,22 @@
+{
+  "_version": 1,
+  "_description": "Per-class bounding box calibration offsets. cx_off, cy_off = pixel offsets applied to bbox center. Scale factors stretch/shrink bbox width and height.",
+  "Container": {
+    "cx_offset_px": 0,
+    "cy_offset_px": 0,
+    "scale_w": 1.0,
+    "scale_h": 1.0
+  },
+  "gate": {
+    "cx_offset_px": 0,
+    "cy_offset_px": 0,
+    "scale_w": 1.0,
+    "scale_h": 1.0
+  },
+  "Waypoint": {
+    "cx_offset_px": 0,
+    "cy_offset_px": 0,
+    "scale_w": 1.0,
+    "scale_h": 1.0
+  }
+}

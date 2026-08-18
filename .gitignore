@@ -1,2 +1,44 @@
-/.venv
-/.vscode
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MAVLink / MAVProxy runtime files & telemetry logs
+*.tlog
+*.tlog.raw
+*.parm
+.lgd-nfy0
+mav.tlog*
+mav.parm*
+
+# Hardware / Hailo / Camera logs
+*.log
+hailort*.log
+cameras*.log
+cam*.log
+
+# Mission runtime logs & video outputs
+mission_logs/
+tile_cache/
+hailo-video-output/
+video-render-output*/
+*.avi
+*.mp4
+
+# OS generated
+.DS_Store
+Thumbs.db

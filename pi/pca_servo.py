@@ -136,9 +136,15 @@ class PCAServoModule(mp_module.MPModule):
         except Exception as exc:
             print("pca_servo: %s failed: %s" % (label, exc))
 
-    def buka(self):
+    def buka(self, auto_close_delay=None):
         """Open - drop the payload."""
         self._set_angle(ANGLE_BUKA, "BUKA")
+        if auto_close_delay and auto_close_delay > 0:
+            import threading
+            def _auto_close():
+                time.sleep(auto_close_delay)
+                self.tutup()
+            threading.Thread(target=_auto_close, daemon=True).start()
 
     def tutup(self):
         """Close - secure the payload."""
